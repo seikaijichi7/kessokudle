@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kessoku Quiz & Mixer</title>
+    <style>
+        body { 
+            /* The gradient acts as a backup while the image loads */
+            background: radial-gradient(circle at top, #1e1e2e 0%, #11111b 100%); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            transition: background-image 0.5s ease-in-out; /* Smooth fade when image changes */
+            
+            /* This semi-transparent overlay ensures text is ALWAYS readable */
+            box-shadow: inset 0 0 0 2000px rgba(0, 0, 0, 0.7); 
+            
+            color: #cdd6f4; 
+            font-family: 'Segoe UI', sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 800px; margin: auto; }
+        
+        /* UI Elements */
+        select, input[type=text] { 
+            background: #1e1e1e; color: #ff4081; border: 2px solid #ff4081; 
+            padding: 10px 20px; border-radius: 25px; font-size: 16px; outline: none;
+        }
+        canvas { 
+            background: rgba(0, 0, 0, 0.6); 
+            border: 1px solid rgba(255, 64, 129, 0.3); 
+            width: 100%; 
+            height: 180px; 
+            border-radius: 15px; 
+            margin: 20px 0; 
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), 0 0 10px rgba(255, 64, 129, 0.1);
+        }
+        
+        /* Mixer & Quiz Layout */
+        .mixer { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .channel { 
+            display: flex; align-items: center; background: #1e1e1e; 
+            padding: 8px 20px; border-radius: 8px; width: 450px; justify-content: space-between; 
+        }
+        
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            text-shadow: 0 0 15px rgba(255, 64, 129, 0.5);
+        }
+
+        /* Buttons */
+        button { 
+            padding: 12px 25px; font-size: 16px; background: #ff4081; 
+            color: white; border: none; border-radius: 50px; cursor: pointer; 
+            font-weight: bold; margin: 5px; transition: 0.2s;
+        }
+        button:disabled { background: #444; cursor: not-allowed; }
+        .quiz-btn { background: #00e676; color: #000; }
+        .pause-btn { background: #ff9100; }
+
+        #quiz-ui { background: #252525; padding: 20px; border-radius: 15px; margin-top: 20px; display: none; border: 2px dashed #ff4081; }
+        .score-display { font-size: 24px; color: #00e676; margin: 10px 0; font-weight: bold; }
+        .hidden { display: none !important; }
+
+
+        .footer {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 0.7rem; /* Testo molto piccolo */
+            color: #555; /* Colore scuro e discreto */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .seika-photo {
+            width: 40px; /* Dimensioni della foto */
+            height: 40px;
+            border-radius: 50%; /* Foto circolare */
+            border: 1px solid #555;
+            object-fit: cover; /* Assicura che la foto si adatti al cerchio */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 id="mainTitle">Kessoku Band Mixer</h1>
+        
+        
+        <div id="setup-controls">
+            <select id="songSelect"><option>Loading tracks...</option></select>
+            <button id="startBtn">PLAY MIXER</button>
+            <button class="quiz-btn" id="quizModeBtn">START KESSOKUDLE</button>
+        </div>
+        
+        <div id="playback-controls" class="hidden">
+            <button class="pause-btn" id="pauseBtn">PAUSE</button>
+            <button id="stopBtn">QUIT TO MENU</button>
+        </div>
+        
+        <canvas id="visualizer"></canvas>
+        
+        <div id="quiz-ui">
+            <div class="score-display">Score: <span id="scoreVal">0</span></div>
+            <h2 id="quiz-status">Listen to the drums...</h2>
+            <input type="text" id="guessInput" placeholder="Song name?">
+            <button onclick="submitGuess()">SUBMIT</button>
+            <button id="hintBtn" onclick="provideHint()">ADD INSTRUMENT (Hint)</button>
+            <div id="quiz-result" style="margin-top:15px; font-weight:bold;"></div>
+            <button id="nextBtn" class="hidden" onclick="loadNextQuizSong()">NEXT SONG</button>
+        </div>
+        
+        <div id="mixer-ui" class="mixer">
+            <div class="channel"><span style="color:#ffd600">DRUMS</span><input type="range" id="vol-drums" min="0" max="1" step="0.01" value="1"></div>
+            <div class="channel"><span style="color:#2979ff">BASS</span><input type="range" id="vol-bass" min="0" max="1" step="0.01" value="0"></div>
+            <div class="channel"><span style="color:#ff5252">RHYTHM</span><input type="range" id="vol-rhythm" min="0" max="1" step="0.01" value="0"></div>
+            <div class="channel"><span style="color:#ffa5c3">LEAD GTR</span><input type="range" id="vol-lead" min="0" max="1" step="0.01" value="0"></div>
+            <div class="channel"><span style="color:#ff5252">VOCALS</span><input type="range" id="vol-vocals" min="0" max="1" step="0.01" value="0"></div>
+        </div>
+
+        <div class="status" id="loadStatus"></div>
+    </div>
+
+    <div class="footer">
+        <img src="https://i.postimg.cc/9MQMgWJx/Seika-Ijichi.webp" alt="Seika Ijichi" class="seika-photo">
+        <span>made with hate by Seika</span>
+    </div>
+
+    <script>
+        const bgImages = [
+            "https://images2.alphacoders.com/129/1292065.png",
+            "https://images8.alphacoders.com/129/thumb-1920-1295566.png",
+            "https://w0.peakpx.com/wallpaper/284/605/HD-wallpaper-anime-bocchi-the-rock.jpg",
+            "https://images.wallpapersden.com/image/download/bocchi-the-rock-4k-cool_bW5pbGeUmZqaraWkpJRobWllrWdma2U.jpg",
+            "https://wallpapercave.com/wp/wp12156445.jpg"
+        ];
+
+        function setRandomBackground() {
+            const randomImg = bgImages[Math.floor(Math.random() * bgImages.length)];
+            document.body.style.backgroundImage = `url('${randomImg}')`;
+        }
+
+        // Call it immediately when the page loads
+        setRandomBackground();
+
+        let audioCtx, tracks = {}, isQuizMode = false, isPaused = false;
+        let score = 0, currentSongIndex = 0, hintLevel = 0, songList = [];
+        const stemIds = ['drums', 'bass', 'rhythm', 'lead', 'vocals'];
+        let hasSubmitted = false;
+
+        // Load Tracks from TXT
+        async function loadTrackList() {
+            const response = await fetch('tracks.txt');
+            const text = await response.text();
+            songList = text.split('\n').map(s => s.trim()).filter(s => s !== '');
+
+            shuffleArray(songList);
+
+            const select = document.getElementById('songSelect');
+            const alphaList = [...songList].sort();
+            select.innerHTML = songList.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+        loadTrackList();
+
+        // Mode Switching
+        document.getElementById('startBtn').onclick = () => startAudio(false);
+        document.getElementById('quizModeBtn').onclick = () => startAudio(true);
+        document.getElementById('stopBtn').onclick = () => location.reload();
+
+        // Pause/Resume Logic
+        document.getElementById('pauseBtn').onclick = function() {
+            if (!audioCtx) return;
+
+            if (isPaused) {
+                // RESUME: Play every track and resume the context
+                Object.values(tracks).forEach(t => t.audio.play());
+                audioCtx.resume();
+                this.innerText = "PAUSE";
+                this.style.background = "#ff9100"; // Back to orange
+                isPaused = false;
+            } else {
+                // PAUSE: Pause every track and suspend the context
+                Object.values(tracks).forEach(t => t.audio.pause());
+                audioCtx.suspend();
+                this.innerText = "RESUME";
+                this.style.background = "#00e676"; // Turn green to show it's ready to play
+                isPaused = true;
+            }
+        };
+
+        async function startAudio(quiz) {
+            isQuizMode = quiz;
+            const titleElement = document.getElementById('mainTitle');
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            document.getElementById('setup-controls').classList.add('hidden');
+            document.getElementById('playback-controls').classList.remove('hidden');
+            
+            if (quiz) {
+                titleElement.innerText = "Kessokudle";
+                document.getElementById('quiz-ui').style.display = 'block';
+                document.getElementById('mixer-ui').classList.add('hidden');
+                loadQuizSong();
+            } else {
+                titleElement.innerText = "Kessoku Band Mixer";
+                initStems(document.getElementById('songSelect').value);
+            }
+            draw();
+        }
+
+        document.getElementById('guessInput').addEventListener('keyup', function (e) {
+            if (e.key === 'Enter') {
+                if (!hasSubmitted) {
+                    submitGuess();
+                } else {
+                    // Check if the Next button is visible
+                    const nextBtn = document.getElementById('nextBtn');
+                    if (!nextBtn.classList.contains('hidden')) {
+                        // We add a tiny delay so the UI has time to update 
+                        // before the next song resets everything
+                        setTimeout(() => {
+                            loadNextQuizSong();
+                        }, 100); 
+                    }
+                }
+            }
+        });
+
+        function initStems(songName) {
+            // Stop old audio
+            Object.values(tracks).forEach(t => { t.audio.pause(); t.audio.src = ""; });
+            
+            const statusDiv = document.getElementById('loadStatus');
+            statusDiv.innerHTML = isQuizMode ? "Quiz in progress..." : `Playing: ${songName}`;
+
+            stemIds.forEach((id, i) => {
+                const fileName = id === 'lead' ? 'LEAD_GUITAR' : (id === 'rhythm' ? 'RHYTHM_GUITAR' : (id === 'vocals' ? 'LEAD_VOCALS' : id.toUpperCase()));
+                const audio = new Audio(`${songName}/${fileName}.ogg`);
+                audio.loop = true;
+                audio.crossOrigin = "anonymous";
+                
+                const source = audioCtx.createMediaElementSource(audio);
+                const gainNode = audioCtx.createGain();
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 64;
+
+                // Volume Logic
+                let vol = 0;
+                if (!isQuizMode) vol = document.getElementById(`vol-${id}`).value;
+                else if (id === 'drums') vol = 1; // Start with drums only in quiz
+
+                gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+                source.connect(gainNode).connect(analyser).connect(audioCtx.destination);
+                tracks[id] = { audio, gainNode, analyser };
+
+                if (!isQuizMode) {
+                    document.getElementById(`vol-${id}`).oninput = (e) => {
+                        gainNode.gain.setTargetAtTime(parseFloat(e.target.value), audioCtx.currentTime, 0.02);
+                    };
+                }
+                audio.play();
+            });
+        }
+
+        // QUIZ LOGIC
+        function loadQuizSong() {
+            hasSubmitted = false; // Reset for the new song
+            const submitBtn = document.querySelector('#quiz-ui button[onclick="submitGuess()"]');
+            if(submitBtn) submitBtn.disabled = false; // Re-enable button
+            
+            hintLevel = 0;
+            document.getElementById('quiz-result').innerText = "";
+            document.getElementById('guessInput').value = "";
+            document.getElementById('nextBtn').classList.add('hidden');
+            document.getElementById('hintBtn').disabled = false;
+            document.getElementById('quiz-status').innerText = "Song " + (currentSongIndex + 1) + ": Listening to the drums...";
+            initStems(songList[currentSongIndex]);
+            document.getElementById('guessInput').focus();
+        }
+
+        function provideHint() {
+            hintLevel++;
+            const nextInstrument = stemIds[hintLevel];
+            tracks[nextInstrument].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5);
+            document.getElementById('quiz-status').innerText = `Added ${nextInstrument}!`;
+            if (hintLevel >= 4) document.getElementById('hintBtn').disabled = true;
+        }
+
+        function submitGuess() {
+            // If already submitted, do nothing
+            if (hasSubmitted) return; 
+
+            const guess = document.getElementById('guessInput').value.trim().toLowerCase();
+            const answer = songList[currentSongIndex].toLowerCase();
+            const resultDiv = document.getElementById('quiz-result');
+            const submitBtn = document.querySelector('#quiz-ui button[onclick="submitGuess()"]');
+            
+            hasSubmitted = true; // Block further submissions
+            submitBtn.disabled = true; // Visually disable the button
+
+            const dist = levenshtein(guess, answer);
+            if (dist <= 5) {
+                const points = 5 - hintLevel;
+                score += points;
+                resultDiv.innerHTML = `<span style="color:#00e676">CORRECT! (+${points} points)</span>`;
+            } else {
+                resultDiv.innerHTML = `<span style="color:#ff5252">INCORRECT. It was: ${songList[currentSongIndex]}</span>`;
+            }
+            
+            document.getElementById('scoreVal').innerText = score;
+            document.getElementById('nextBtn').classList.remove('hidden');
+            document.getElementById('hintBtn').disabled = true;
+            
+            // Reveal all stems for the celebration
+            stemIds.forEach(id => tracks[id].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5));
+        }
+
+        function loadNextQuizSong() {
+            currentSongIndex++;
+            if (currentSongIndex < songList.length) loadQuizSong();
+            else document.getElementById('quiz-status').innerText = "Game Over! Final Score: " + score;
+        }
+
+        // Fuzzy Matching Algorithm
+        function levenshtein(a, b) {
+            const tmp = [];
+            for (let i = 0; i <= a.length; i++) { tmp[i] = [i]; }
+            for (let j = 0; j <= b.length; j++) { tmp[0][j] = j; }
+            for (let i = 1; i <= a.length; i++) {
+                for (let j = 1; j <= b.length; j++) {
+                    tmp[i][j] = Math.min(tmp[i - 1][j] + 1, tmp[i][j - 1] + 1, tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                }
+            }
+            return tmp[a.length][b.length];
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        function draw() {
+            const canvas = document.getElementById('visualizer');
+            const ctx = canvas.getContext('2d');
+            requestAnimationFrame(draw);
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const ids = Object.keys(tracks);
+            const barWidth = canvas.width / ids.length;
+            ids.forEach((id, i) => {
+                const data = new Uint8Array(tracks[id].analyser.frequencyBinCount);
+                tracks[id].analyser.getByteFrequencyData(data);
+                const avg = data.reduce((a, b) => a + b, 0) / data.length;
+                const h = (avg / 255) * canvas.height;
+                ctx.fillStyle = (id === 'drums') ? '#ffd600' : (id === 'bass') ? '#2979ff' :  (id === 'lead') ? '#ff80ab' :'#ff5252';
+                ctx.fillRect(i * barWidth + 10, canvas.height - h, barWidth - 20, h);
+            });
+        }
+    </script>
+</body>
+</html>
