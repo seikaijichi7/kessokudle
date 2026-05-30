@@ -119,12 +119,14 @@
         
         <div id="quiz-ui">
             <div class="score-display">Score: <span id="scoreVal">0</span></div>
+            <div id="attempts-display" style="font-size: 16px; color: #ff9100; margin-bottom: 10px; font-weight: bold;">Attempts: 5</div>
+            
             <h2 id="quiz-status">Listen to the drums...</h2>
-            <input type="text" id="guessInput" placeholder="Song name?">
-            <button onclick="submitGuess()">SUBMIT</button>
-            <button id="hintBtn" onclick="provideHint()">ADD INSTRUMENT (Hint)</button>
+            <input type="text" id="guessInput" placeholder="Nome della canzone?">
+            <button id="submitBtn" onclick="submitGuess()">SUBMIT</button>
             <div id="quiz-result" style="margin-top:15px; font-weight:bold;"></div>
             <button id="nextBtn" class="hidden" onclick="loadNextQuizSong()">NEXT SONG</button>
+            <button id="restartBtn" class="hidden" onclick="location.reload()" style="background: #00e676; color: black;">PLAY AGAIN</button>
         </div>
         
         <div id="mixer-ui" class="mixer">
@@ -318,62 +320,104 @@
         }
 
         // QUIZ LOGIC
+
+        let attemptsLeft = 5;
+
         function loadQuizSong() {
-            hasSubmitted = false; // Reset for the new song
-            const submitBtn = document.querySelector('#quiz-ui button[onclick="submitGuess()"]');
-            if(submitBtn) submitBtn.disabled = false; // Re-enable button
+            hasSubmitted = false; 
+            attemptsLeft = 5; // Reset
+            hintLevel = 0;    // 0 = Drums, 1 = Bass, 2 = Rhythm, 3 = Lead, 4 = Vocals
             
-            hintLevel = 0;
+            document.getElementById('submitBtn').disabled = false; 
             document.getElementById('quiz-result').innerText = "";
             document.getElementById('guessInput').value = "";
+            document.getElementById('guessInput').disabled = false;
             document.getElementById('nextBtn').classList.add('hidden');
-            document.getElementById('hintBtn').disabled = false;
-            document.getElementById('quiz-status').innerText = "Song " + (currentSongIndex + 1) + ": Listening to the drums...";
+            document.getElementById('restartBtn').classList.add('hidden');
+            
+            document.getElementById('attempts-display').innerText = `Attempts: ${attemptsLeft}`;
+            document.getElementById('quiz-status').innerText = `Song ${currentSongIndex + 1} of ${songList.length}: Listen to the drums...`;
+            
             initStems(songList[currentSongIndex]);
             document.getElementById('guessInput').focus();
         }
 
-        function provideHint() {
-            hintLevel++;
-            const nextInstrument = stemIds[hintLevel];
-            tracks[nextInstrument].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5);
-            document.getElementById('quiz-status').innerText = `Added ${nextInstrument}!`;
-            if (hintLevel >= 4) document.getElementById('hintBtn').disabled = true;
-        }
 
         function submitGuess() {
-            // If already submitted, do nothing
             if (hasSubmitted) return; 
 
             const guess = document.getElementById('guessInput').value.trim().toLowerCase();
             const answer = songList[currentSongIndex].toLowerCase();
             const resultDiv = document.getElementById('quiz-result');
-            const submitBtn = document.querySelector('#quiz-ui button[onclick="submitGuess()"]');
+            const submitBtn = document.getElementById('submitBtn');
             
-            hasSubmitted = true; // Block further submissions
-            submitBtn.disabled = true; // Visually disable the button
-
             const dist = levenshtein(guess, answer);
+
+            // Vittoria: Risposta corretta (entro la tolleranza Levenshtein)
             if (dist <= 5) {
-                const points = 5 - hintLevel;
+                hasSubmitted = true;
+                submitBtn.disabled = true;
+                document.getElementById('guessInput').disabled = true;
+                
+                // Assegna i punti in base a quanti tentativi sono rimasti
+                const points = attemptsLeft; 
                 score += points;
+                document.getElementById('scoreVal').innerText = score;
+                
                 resultDiv.innerHTML = `<span style="color:#00e676">CORRECT! (+${points} points)</span>`;
-            } else {
-                resultDiv.innerHTML = `<span style="color:#ff5252">INCORRECT. It was: ${songList[currentSongIndex]}</span>`;
+                
+                // Rivela TUTTI gli strumenti per festeggiare
+                stemIds.forEach(id => tracks[id].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5));
+                
+                MostraPulsanteSuccessivo();
+            } 
+            // Errore: Risposta sbagliata
+            else {
+                attemptsLeft--;
+                document.getElementById('attempts-display').innerText = `Attempts: ${attemptsLeft}`;
+                document.getElementById('guessInput').value = ""; // Svuota l'input per il prossimo tentativo
+                
+                if (attemptsLeft > 0) {
+                    // Sblocca lo strumento successivo come penalità/aiuto
+                    hintLevel++;
+                    const nextInstrument = stemIds[hintLevel];
+                    tracks[nextInstrument].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5);
+                    
+                    resultDiv.innerHTML = `<span style="color:#ff9100">Wrong. Added instrument: ${nextInstrument.toUpperCase()}</span>`;
+                    document.getElementById('quiz-status').innerText = `Listen to the ${nextInstrument.toUpperCase()}`;
+                } 
+                // Sconfitta: Finiti i tentativi per questa canzone
+                else {
+                    hasSubmitted = true;
+                    submitBtn.disabled = true;
+                    document.getElementById('guessInput').disabled = true;
+                    
+                    resultDiv.innerHTML = `<span style="color:#ff5252">Incorrect. It was: ${songList[currentSongIndex]}</span>`;
+                    
+                    // Rivela comunque tutto l'audio alla fine
+                    stemIds.forEach(id => tracks[id].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5));
+                    
+                    MostraPulsanteSuccessivo();
+                }
             }
-            
-            document.getElementById('scoreVal').innerText = score;
-            document.getElementById('nextBtn').classList.remove('hidden');
-            document.getElementById('hintBtn').disabled = true;
-            
-            // Reveal all stems for the celebration
-            stemIds.forEach(id => tracks[id].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5));
         }
 
+        // Funzione di controllo per decidere se mostrare "Prossima Canzone" o "Riavvia Gioco"
+        function MostraPulsanteSuccessivo() {
+            if (currentSongIndex + 1 < songList.length) {
+                document.getElementById('nextBtn').classList.remove('hidden');
+            } else {
+                document.getElementById('quiz-status').innerText = "Quiz Completed!";
+                document.getElementById('quiz-result').innerHTML += `<br><span style="color:#ffa5c3; font-size:20px;">Final Score: ${score}</span>`;
+                document.getElementById('restartBtn').classList.remove('hidden');
+            }
+        }
+        
         function loadNextQuizSong() {
             currentSongIndex++;
-            if (currentSongIndex < songList.length) loadQuizSong();
-            else document.getElementById('quiz-status').innerText = "Game Over! Final Score: " + score;
+            if (currentSongIndex < songList.length) {
+                loadQuizSong();
+            }
         }
 
         // Fuzzy Matching Algorithm
