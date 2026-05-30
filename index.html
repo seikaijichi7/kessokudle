@@ -96,6 +96,11 @@
 <body>
 
     <div class="container">
+        <div id="dev-panel" class="hidden" style="background: rgba(0,0,0,0.8); border: 1px solid #ff4081; padding: 10px; margin: 10px 0; border-radius: 10px; font-family: monospace; font-size: 14px; text-align: left;">
+            <h3 style="margin: 0 0 10px 0; color: #ff4081; font-size: 16px;">DEV MODE: Timecodes</h3>
+            <div id="dev-timecodes"></div>
+            <div style="margin-top: 10px; color: #888;">AudioCtx Time: <span id="ctx-time">0.000</span>s</div>
+        </div>
         <h1 id="mainTitle">Kessoku Band Mixer</h1>
         
         
@@ -139,6 +144,17 @@
     </div>
 
     <script>
+        let devModeActive = false;
+        document.addEventListener('keydown', (e) => {
+            // Premi CTRL + D per mostrare/nascondere le statistiche sviluppatore
+            if (e.ctrlKey && e.key.toLowerCase() === 'd') {
+                e.preventDefault();
+                devModeActive = !devModeActive;
+                const panel = document.getElementById('dev-panel');
+                if (devModeActive) panel.classList.remove('hidden');
+                else panel.classList.add('hidden');
+            }
+        });
         const bgImages = [
             "https://images2.alphacoders.com/129/1292065.png",
             "https://images8.alphacoders.com/129/thumb-1920-1295566.png",
@@ -182,20 +198,16 @@
         // Pause/Resume Logic
         document.getElementById('pauseBtn').onclick = function() {
             if (!audioCtx) return;
-
+        
             if (isPaused) {
-                // RESUME: Play every track and resume the context
-                Object.values(tracks).forEach(t => t.audio.play());
                 audioCtx.resume();
                 this.innerText = "PAUSE";
-                this.style.background = "#ff9100"; // Back to orange
+                this.style.background = "#ff9100";
                 isPaused = false;
             } else {
-                // PAUSE: Pause every track and suspend the context
-                Object.values(tracks).forEach(t => t.audio.pause());
                 audioCtx.suspend();
                 this.innerText = "RESUME";
-                this.style.background = "#00e676"; // Turn green to show it's ready to play
+                this.style.background = "#00e676";
                 isPaused = true;
             }
         };
@@ -238,40 +250,71 @@
             }
         });
 
-        function initStems(songName) {
-            // Stop old audio
-            Object.values(tracks).forEach(t => { t.audio.pause(); t.audio.src = ""; });
-            
+        async function initStems(songName) {
             const statusDiv = document.getElementById('loadStatus');
-            statusDiv.innerHTML = isQuizMode ? "Quiz in progress..." : `Playing: ${songName}`;
-
-            stemIds.forEach((id, i) => {
+            statusDiv.innerHTML = "Caricamento tracce in corso... Attendi.";
+        
+            // 1. Ferma le tracce precedenti se esistono
+            if (Object.keys(tracks).length > 0) {
+                Object.values(tracks).forEach(t => {
+                    if(t.source) t.source.stop(); 
+                });
+                tracks = {};
+            }
+        
+            // 2. Prepara le promesse per scaricare tutti i file simultaneamente
+            const loadPromises = stemIds.map(async (id) => {
                 const fileName = id === 'lead' ? 'LEAD_GUITAR' : (id === 'rhythm' ? 'RHYTHM_GUITAR' : (id === 'vocals' ? 'LEAD_VOCALS' : id.toUpperCase()));
-                const audio = new Audio(`${songName}/${fileName}.ogg`);
-                audio.loop = true;
-                audio.crossOrigin = "anonymous";
+                const url = `${songName}/${fileName}.ogg`;
+        
+                try {
+                    const response = await fetch(url);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                    return { id, buffer: audioBuffer };
+                } catch (error) {
+                    console.error(`Errore nel caricamento di ${url}:`, error);
+                }
+            });
+        
+            // 3. Aspetta che TUTTE le tracce siano scaricate e decodificate
+            const loadedBuffers = await Promise.all(loadPromises);
+        
+            // 4. Configura i nodi audio e avviali tutti nello stesso esatto momento
+            const startTime = audioCtx.currentTime + 0.1; // Aggiunge 100ms di margine per evitare glitch iniziali
+        
+            loadedBuffers.forEach((item) => {
+                if (!item) return;
                 
-                const source = audioCtx.createMediaElementSource(audio);
+                const source = audioCtx.createBufferSource();
+                source.buffer = item.buffer;
+                source.loop = true; // Il loop sui buffer è perfetto al millisecondo
+        
                 const gainNode = audioCtx.createGain();
                 const analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 64;
-
-                // Volume Logic
+        
+                // Logica del volume
                 let vol = 0;
-                if (!isQuizMode) vol = document.getElementById(`vol-${id}`).value;
-                else if (id === 'drums') vol = 1; // Start with drums only in quiz
-
+                if (!isQuizMode) vol = document.getElementById(`vol-${item.id}`).value;
+                else if (item.id === 'drums') vol = 1;
+        
                 gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
                 source.connect(gainNode).connect(analyser).connect(audioCtx.destination);
-                tracks[id] = { audio, gainNode, analyser };
-
+                
+                tracks[item.id] = { source, gainNode, analyser };
+        
                 if (!isQuizMode) {
-                    document.getElementById(`vol-${id}`).oninput = (e) => {
+                    document.getElementById(`vol-${item.id}`).oninput = (e) => {
                         gainNode.gain.setTargetAtTime(parseFloat(e.target.value), audioCtx.currentTime, 0.02);
                     };
                 }
-                audio.play();
+        
+                // Avvia la traccia
+                source.start(startTime);
             });
+        
+            statusDiv.innerHTML = isQuizMode ? "Quiz in progress..." : `Playing: ${songName}`;
         }
 
         // QUIZ LOGIC
@@ -367,6 +410,26 @@
                 const h = (avg / 255) * canvas.height;
                 ctx.fillStyle = (id === 'drums') ? '#ffd600' : (id === 'bass') ? '#2979ff' :  (id === 'lead') ? '#ff80ab' :'#ff5252';
                 ctx.fillRect(i * barWidth + 10, canvas.height - h, barWidth - 20, h);
+            if (devModeActive && audioCtx) {
+                document.getElementById('ctx-time').innerText = audioCtx.currentTime.toFixed(3);
+                
+                let timecodesHTML = '';
+                Object.keys(tracks).forEach(id => {
+                    // Nota: con il nuovo metodo Buffer, la traccia non ha un .currentTime proprio,
+                    // è tutto sincronizzato all'audioCtx. Se volessi tracciare il tempo del loop esatto, 
+                    // facciamo il modulo del tempo attuale diviso la durata della traccia.
+                    const buffer = tracks[id].source.buffer;
+                    if(buffer) {
+                        const duration = buffer.duration;
+                        // Calcola il punto esatto in cui si trova il loop corrente
+                        const currentLoopTime = (audioCtx.currentTime % duration).toFixed(3);
+                        timecodesHTML += `<div style="color: white; margin-bottom: 2px;">
+                            <span style="color:#ff4081">[${id.toUpperCase()}]</span> Loop Time: ${currentLoopTime}s / ${duration.toFixed(3)}s
+                        </div>`;
+                    }
+                });
+                document.getElementById('dev-timecodes').innerHTML = timecodesHTML;
+            }
             });
         }
     </script>
