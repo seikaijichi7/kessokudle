@@ -114,7 +114,7 @@
             <div class="score-display">Score: <span id="scoreVal">0</span></div>
             <div id="attempts-display" style="font-size: 16px; color: #ff9100; margin-bottom: 10px; font-weight: bold;">Attempts: 5</div>
             <h2 id="quiz-status">Listen to the drums...</h2>
-            <input type="text" id="guessInput" placeholder="Song name?">
+            <input type="text" id="guessInput" placeholder="Song name?" list="songOptions" autocomplete="off">
             <datalist id="songOptions"></datalist>
             <button id="submitBtn" onclick="submitGuess()">SUBMIT</button>
             <div id="quiz-result" style="margin-top:15px; font-weight:bold;"></div>
@@ -236,12 +236,32 @@
         }
 
         document.getElementById('guessInput').addEventListener('keydown', function (e) {
+            const datalist = document.getElementById('songOptions');
+            
+            // Gestione del tasto TAB per l'autocompletamento pulito
+            if (e.key === 'Tab') {
+                // Se c'è un valore parziale, proviamo a cercare la prima corrispondenza nella lista
+                const currentInput = this.value.toLowerCase();
+                if (currentInput.length > 0) {
+                    const options = Array.from(datalist.options);
+                    const match = options.find(opt => opt.value.toLowerCase().startsWith(currentInput));
+                    
+                    if (match) {
+                        e.preventDefault(); // Blocca lo spostamento del focus ad altri elementi HTML
+                        this.value = match.value; // Inserisce il titolo completo nella casella
+                    }
+                }
+            }
+
+            // Gestione del tasto INVIO (Invia risposta / Canzone successiva)
             if (e.key === 'Enter') {
-                e.preventDefault(); 
+                e.preventDefault(); // Evita comportamenti nativi indesiderati
                 
                 if (!hasSubmitted) {
+                    // Primo invio: controlla la risposta del giocatore
                     submitGuess();
                 } else {
+                    // Secondo invio: passa alla prossima canzone o riavvia
                     const nextBtn = document.getElementById('nextBtn');
                     const restartBtn = document.getElementById('restartBtn');
                     
