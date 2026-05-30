@@ -1,20 +1,17 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Kessoku Quiz & Mixer</title>
     <style>
         body { 
-            /* The gradient acts as a backup while the image loads */
             background: radial-gradient(circle at top, #1e1e2e 0%, #11111b 100%); 
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
             background-repeat: no-repeat;
-            transition: background-image 0.5s ease-in-out; /* Smooth fade when image changes */
-            
-            /* This semi-transparent overlay ensures text is ALWAYS readable */
+            transition: background-image 0.5s ease-in-out;
             box-shadow: inset 0 0 0 2000px rgba(0, 0, 0, 0.7); 
-            
             color: #cdd6f4; 
             font-family: 'Segoe UI', sans-serif; 
             text-align: center; 
@@ -25,7 +22,6 @@
 
         .container { max-width: 800px; margin: auto; }
         
-        /* UI Elements */
         select, input[type=text] { 
             background: #1e1e1e; color: #ff4081; border: 2px solid #ff4081; 
             padding: 10px 20px; border-radius: 25px; font-size: 16px; outline: none;
@@ -40,7 +36,6 @@
             box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), 0 0 10px rgba(255, 64, 129, 0.1);
         }
         
-        /* Mixer & Quiz Layout */
         .mixer { display: flex; flex-direction: column; align-items: center; gap: 10px; }
         .channel { 
             display: flex; align-items: center; background: #1e1e1e; 
@@ -55,7 +50,6 @@
             text-shadow: 0 0 15px rgba(255, 64, 129, 0.5);
         }
 
-        /* Buttons */
         button { 
             padding: 12px 25px; font-size: 16px; background: #ff4081; 
             color: white; border: none; border-radius: 50px; cursor: pointer; 
@@ -69,15 +63,14 @@
         .score-display { font-size: 24px; color: #00e676; margin: 10px 0; font-weight: bold; }
         .hidden { display: none !important; }
 
-
         .footer {
             position: absolute;
             bottom: 10px;
             left: 0;
             width: 100%;
             text-align: center;
-            font-size: 0.7rem; /* Testo molto piccolo */
-            color: #555; /* Colore scuro e discreto */
+            font-size: 0.7rem;
+            color: #555;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -85,11 +78,11 @@
         }
 
         .seika-photo {
-            width: 40px; /* Dimensioni della foto */
+            width: 40px;
             height: 40px;
-            border-radius: 50%; /* Foto circolare */
+            border-radius: 50%;
             border: 1px solid #555;
-            object-fit: cover; /* Assicura che la foto si adatti al cerchio */
+            object-fit: cover;
         }
     </style>
 </head>
@@ -101,8 +94,8 @@
             <div id="dev-timecodes"></div>
             <div style="margin-top: 10px; color: #888;">AudioCtx Time: <span id="ctx-time">0.000</span>s</div>
         </div>
+
         <h1 id="mainTitle">Kessoku Band Mixer</h1>
-        
         
         <div id="setup-controls">
             <select id="songSelect"><option>Loading tracks...</option></select>
@@ -122,7 +115,7 @@
             <div id="attempts-display" style="font-size: 16px; color: #ff9100; margin-bottom: 10px; font-weight: bold;">Attempts: 5</div>
             
             <h2 id="quiz-status">Listen to the drums...</h2>
-            <input type="text" id="guessInput" placeholder="Nome della canzone?">
+            <input type="text" id="guessInput" placeholder="Song name?">
             <button id="submitBtn" onclick="submitGuess()">SUBMIT</button>
             <div id="quiz-result" style="margin-top:15px; font-weight:bold;"></div>
             <button id="nextBtn" class="hidden" onclick="loadNextQuizSong()">NEXT SONG</button>
@@ -146,9 +139,9 @@
     </div>
 
     <script>
+        // Developer panel keyboard shortcut listener (CTRL + D)
         let devModeActive = false;
         document.addEventListener('keydown', (e) => {
-            // Premi CTRL + D per mostrare/nascondere le statistiche sviluppatore
             if (e.ctrlKey && e.key.toLowerCase() === 'd') {
                 e.preventDefault();
                 devModeActive = !devModeActive;
@@ -157,6 +150,8 @@
                 else panel.classList.add('hidden');
             }
         });
+
+        // Background rotation system
         const bgImages = [
             "https://images2.alphacoders.com/129/1292065.png",
             "https://images8.alphacoders.com/129/thumb-1920-1295566.png",
@@ -169,16 +164,16 @@
             const randomImg = bgImages[Math.floor(Math.random() * bgImages.length)];
             document.body.style.backgroundImage = `url('${randomImg}')`;
         }
-
-        // Call it immediately when the page loads
         setRandomBackground();
 
+        // Audio state definitions
         let audioCtx, tracks = {}, isQuizMode = false, isPaused = false;
         let score = 0, currentSongIndex = 0, hintLevel = 0, songList = [];
         const stemIds = ['drums', 'bass', 'rhythm', 'lead', 'vocals'];
         let hasSubmitted = false;
+        let attemptsLeft = 5;
 
-        // Load Tracks from TXT
+        // Fetch song list from local text file
         async function loadTrackList() {
             const response = await fetch('tracks.txt');
             const text = await response.text();
@@ -187,17 +182,16 @@
             shuffleArray(songList);
 
             const select = document.getElementById('songSelect');
-            const alphaList = [...songList].sort();
             select.innerHTML = songList.map(s => `<option value="${s}">${s}</option>`).join('');
         }
         loadTrackList();
 
-        // Mode Switching
+        // Control triggers
         document.getElementById('startBtn').onclick = () => startAudio(false);
         document.getElementById('quizModeBtn').onclick = () => startAudio(true);
         document.getElementById('stopBtn').onclick = () => location.reload();
 
-        // Pause/Resume Logic
+        // Playback context state toggle
         document.getElementById('pauseBtn').onclick = function() {
             if (!audioCtx) return;
         
@@ -239,11 +233,8 @@
                 if (!hasSubmitted) {
                     submitGuess();
                 } else {
-                    // Check if the Next button is visible
                     const nextBtn = document.getElementById('nextBtn');
                     if (!nextBtn.classList.contains('hidden')) {
-                        // We add a tiny delay so the UI has time to update 
-                        // before the next song resets everything
                         setTimeout(() => {
                             loadNextQuizSong();
                         }, 100); 
@@ -252,11 +243,11 @@
             }
         });
 
+        // Simultaneous multitrack asset buffer download and decoding
         async function initStems(songName) {
             const statusDiv = document.getElementById('loadStatus');
-            statusDiv.innerHTML = "Caricamento tracce in corso... Attendi.";
+            statusDiv.innerHTML = "Loading audio tracks... Please wait.";
         
-            // 1. Ferma le tracce precedenti se esistono
             if (Object.keys(tracks).length > 0) {
                 Object.values(tracks).forEach(t => {
                     if(t.source) t.source.stop(); 
@@ -264,7 +255,6 @@
                 tracks = {};
             }
         
-            // 2. Prepara le promesse per scaricare tutti i file simultaneamente
             const loadPromises = stemIds.map(async (id) => {
                 const fileName = id === 'lead' ? 'LEAD_GUITAR' : (id === 'rhythm' ? 'RHYTHM_GUITAR' : (id === 'vocals' ? 'LEAD_VOCALS' : id.toUpperCase()));
                 const url = `${songName}/${fileName}.ogg`;
@@ -275,28 +265,24 @@
                     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
                     return { id, buffer: audioBuffer };
                 } catch (error) {
-                    console.error(`Errore nel caricamento di ${url}:`, error);
+                    console.error(`Failed to load stem asset ${url}:`, error);
                 }
             });
         
-            // 3. Aspetta che TUTTE le tracce siano scaricate e decodificate
             const loadedBuffers = await Promise.all(loadPromises);
-        
-            // 4. Configura i nodi audio e avviali tutti nello stesso esatto momento
-            const startTime = audioCtx.currentTime + 0.1; // Aggiunge 100ms di margine per evitare glitch iniziali
+            const startTime = audioCtx.currentTime + 0.1; // Execution margin buffer to prevent startup scheduling sync jitter
         
             loadedBuffers.forEach((item) => {
                 if (!item) return;
                 
                 const source = audioCtx.createBufferSource();
                 source.buffer = item.buffer;
-                source.loop = true; // Il loop sui buffer è perfetto al millisecondo
+                source.loop = true; 
         
                 const gainNode = audioCtx.createGain();
                 const analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 64;
         
-                // Logica del volume
                 let vol = 0;
                 if (!isQuizMode) vol = document.getElementById(`vol-${item.id}`).value;
                 else if (item.id === 'drums') vol = 1;
@@ -312,21 +298,17 @@
                     };
                 }
         
-                // Avvia la traccia
                 source.start(startTime);
             });
         
             statusDiv.innerHTML = isQuizMode ? "Quiz in progress..." : `Playing: ${songName}`;
         }
 
-        // QUIZ LOGIC
-
-        let attemptsLeft = 5;
-
+        // Quiz State Management
         function loadQuizSong() {
             hasSubmitted = false; 
-            attemptsLeft = 5; // Reset
-            hintLevel = 0;    // 0 = Drums, 1 = Bass, 2 = Rhythm, 3 = Lead, 4 = Vocals
+            attemptsLeft = 5; 
+            hintLevel = 0;    
             
             document.getElementById('submitBtn').disabled = false; 
             document.getElementById('quiz-result').innerText = "";
@@ -342,7 +324,6 @@
             document.getElementById('guessInput').focus();
         }
 
-
         function submitGuess() {
             if (hasSubmitted) return; 
 
@@ -353,32 +334,26 @@
             
             const dist = levenshtein(guess, answer);
 
-            // Vittoria: Risposta corretta (entro la tolleranza Levenshtein)
             if (dist <= 5) {
                 hasSubmitted = true;
                 submitBtn.disabled = true;
                 document.getElementById('guessInput').disabled = true;
                 
-                // Assegna i punti in base a quanti tentativi sono rimasti
                 const points = attemptsLeft; 
                 score += points;
                 document.getElementById('scoreVal').innerText = score;
                 
                 resultDiv.innerHTML = `<span style="color:#00e676">CORRECT! (+${points} points)</span>`;
                 
-                // Rivela TUTTI gli strumenti per festeggiare
                 stemIds.forEach(id => tracks[id].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5));
-                
-                MostraPulsanteSuccessivo();
+                handleNavigationDisplay();
             } 
-            // Errore: Risposta sbagliata
             else {
                 attemptsLeft--;
                 document.getElementById('attempts-display').innerText = `Attempts: ${attemptsLeft}`;
-                document.getElementById('guessInput').value = ""; // Svuota l'input per il prossimo tentativo
+                document.getElementById('guessInput').value = ""; 
                 
                 if (attemptsLeft > 0) {
-                    // Sblocca lo strumento successivo come penalità/aiuto
                     hintLevel++;
                     const nextInstrument = stemIds[hintLevel];
                     tracks[nextInstrument].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5);
@@ -386,7 +361,6 @@
                     resultDiv.innerHTML = `<span style="color:#ff9100">Wrong. Added instrument: ${nextInstrument.toUpperCase()}</span>`;
                     document.getElementById('quiz-status').innerText = `Listen to the ${nextInstrument.toUpperCase()}`;
                 } 
-                // Sconfitta: Finiti i tentativi per questa canzone
                 else {
                     hasSubmitted = true;
                     submitBtn.disabled = true;
@@ -394,16 +368,13 @@
                     
                     resultDiv.innerHTML = `<span style="color:#ff5252">Incorrect. It was: ${songList[currentSongIndex]}</span>`;
                     
-                    // Rivela comunque tutto l'audio alla fine
                     stemIds.forEach(id => tracks[id].gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.5));
-                    
-                    MostraPulsanteSuccessivo();
+                    handleNavigationDisplay();
                 }
             }
         }
 
-        // Funzione di controllo per decidere se mostrare "Prossima Canzone" o "Riavvia Gioco"
-        function MostraPulsanteSuccessivo() {
+        function handleNavigationDisplay() {
             if (currentSongIndex + 1 < songList.length) {
                 document.getElementById('nextBtn').classList.remove('hidden');
             } else {
@@ -420,7 +391,7 @@
             }
         }
 
-        // Fuzzy Matching Algorithm
+        // Levenshtein distance string matching evaluation
         function levenshtein(a, b) {
             const tmp = [];
             for (let i = 0; i <= a.length; i++) { tmp[i] = [i]; }
@@ -439,14 +410,19 @@
                 [array[i], array[j]] = [array[j], array[i]];
             }
         }
+
+        // Visualizer engine loop and Developer UI updates
         function draw() {
             const canvas = document.getElementById('visualizer');
             const ctx = canvas.getContext('2d');
             requestAnimationFrame(draw);
+            
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
             const ids = Object.keys(tracks);
             const barWidth = canvas.width / ids.length;
+            
             ids.forEach((id, i) => {
                 const data = new Uint8Array(tracks[id].analyser.frequencyBinCount);
                 tracks[id].analyser.getByteFrequencyData(data);
@@ -454,18 +430,16 @@
                 const h = (avg / 255) * canvas.height;
                 ctx.fillStyle = (id === 'drums') ? '#ffd600' : (id === 'bass') ? '#2979ff' :  (id === 'lead') ? '#ff80ab' :'#ff5252';
                 ctx.fillRect(i * barWidth + 10, canvas.height - h, barWidth - 20, h);
+            });
+
             if (devModeActive && audioCtx) {
                 document.getElementById('ctx-time').innerText = audioCtx.currentTime.toFixed(3);
                 
                 let timecodesHTML = '';
                 Object.keys(tracks).forEach(id => {
-                    // Nota: con il nuovo metodo Buffer, la traccia non ha un .currentTime proprio,
-                    // è tutto sincronizzato all'audioCtx. Se volessi tracciare il tempo del loop esatto, 
-                    // facciamo il modulo del tempo attuale diviso la durata della traccia.
                     const buffer = tracks[id].source.buffer;
                     if(buffer) {
                         const duration = buffer.duration;
-                        // Calcola il punto esatto in cui si trova il loop corrente
                         const currentLoopTime = (audioCtx.currentTime % duration).toFixed(3);
                         timecodesHTML += `<div style="color: white; margin-bottom: 2px;">
                             <span style="color:#ff4081">[${id.toUpperCase()}]</span> Loop Time: ${currentLoopTime}s / ${duration.toFixed(3)}s
@@ -474,7 +448,6 @@
                 });
                 document.getElementById('dev-timecodes').innerHTML = timecodesHTML;
             }
-            });
         }
     </script>
 </body>
