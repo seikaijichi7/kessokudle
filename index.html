@@ -261,15 +261,7 @@
                     // Primo invio: controlla la risposta del giocatore
                     submitGuess();
                 } else {
-                    // Secondo invio: passa alla prossima canzone o riavvia
-                    const nextBtn = document.getElementById('nextBtn');
-                    const restartBtn = document.getElementById('restartBtn');
-                    
-                    if (!nextBtn.classList.contains('hidden')) {
-                        loadNextQuizSong();
-                    } else if (!restartBtn.classList.contains('hidden')) {
-                        location.reload();
-                    }
+                    loadNextQuizSong();
                 }
             }
         });
