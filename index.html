@@ -113,9 +113,9 @@
         <div id="quiz-ui">
             <div class="score-display">Score: <span id="scoreVal">0</span></div>
             <div id="attempts-display" style="font-size: 16px; color: #ff9100; margin-bottom: 10px; font-weight: bold;">Attempts: 5</div>
-            
             <h2 id="quiz-status">Listen to the drums...</h2>
             <input type="text" id="guessInput" placeholder="Song name?">
+            <datalist id="songOptions"></datalist>
             <button id="submitBtn" onclick="submitGuess()">SUBMIT</button>
             <div id="quiz-result" style="margin-top:15px; font-weight:bold;"></div>
             <button id="nextBtn" class="hidden" onclick="loadNextQuizSong()">NEXT SONG</button>
@@ -179,10 +179,17 @@
             const text = await response.text();
             songList = text.split('\n').map(s => s.trim()).filter(s => s !== '');
 
-            shuffleArray(songList);
-
+            const alphaList = [...songList].sort();
+            
+            // MIXER
             const select = document.getElementById('songSelect');
-            select.innerHTML = songList.map(s => `<option value="${s}">${s}</option>`).join('');
+            select.innerHTML = alphaList.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // AUTOCOMPLETE
+            const datalist = document.getElementById('songOptions');
+            datalist.innerHTML = alphaList.map(s => `<option value="${s}"></option>`).join('');
+
+            shuffleArray(songList);
         }
         loadTrackList();
 
@@ -228,16 +235,20 @@
             draw();
         }
 
-        document.getElementById('guessInput').addEventListener('keyup', function (e) {
+        document.getElementById('guessInput').addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
+                e.preventDefault(); 
+                
                 if (!hasSubmitted) {
                     submitGuess();
                 } else {
                     const nextBtn = document.getElementById('nextBtn');
+                    const restartBtn = document.getElementById('restartBtn');
+                    
                     if (!nextBtn.classList.contains('hidden')) {
-                        setTimeout(() => {
-                            loadNextQuizSong();
-                        }, 100); 
+                        loadNextQuizSong();
+                    } else if (!restartBtn.classList.contains('hidden')) {
+                        location.reload();
                     }
                 }
             }
